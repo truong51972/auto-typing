@@ -48,8 +48,11 @@ class WindowsKeyboard:
         self.user32 = ctypes.WinDLL("user32", use_last_error=True)
         self.user32.SendInput.argtypes = (wintypes.UINT, ctypes.POINTER(INPUT), ctypes.c_int)
         self.user32.SendInput.restype = wintypes.UINT
-        self.user32.VkKeyScanW.argtypes = (wintypes.WCHAR,)
-        self.user32.VkKeyScanW.restype = ctypes.c_short
+        self.user32.VkKeyScanExW.argtypes = (wintypes.WCHAR, wintypes.HKL)
+        self.user32.VkKeyScanExW.restype = ctypes.c_short
+        self.user32.GetKeyboardLayout.argtypes = (wintypes.DWORD,)
+        self.user32.GetKeyboardLayout.restype = wintypes.HKL
+        self._target_layout: int | None = None
         self.user32.GetForegroundWindow.restype = wintypes.HWND
         self.user32.GetWindowThreadProcessId.argtypes = (
             wintypes.HWND, ctypes.POINTER(wintypes.DWORD)
@@ -87,7 +90,7 @@ class WindowsKeyboard:
             self._tap_key(VK_RETURN, hold_seconds, wait)
             return
 
-        translation = self.user32.VkKeyScanW(char)
+        translation = self.user32.VkKeyScanExW(char, self._target_layout)
         if translation == -1:
             raise ValueError(f"No physical key mapping for {char!r}")
 
@@ -140,9 +143,12 @@ class WindowsKeyboard:
         if not hwnd:
             raise RuntimeError("No destination window is focused")
         pid = wintypes.DWORD()
-        self.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        thread_id = self.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
         if pid.value == os.getpid():
             raise RuntimeError("Focus the destination app before the countdown ends")
+        self._target_layout = self.user32.GetKeyboardLayout(thread_id)
+        if not self._target_layout:
+            raise RuntimeError("Could not detect destination keyboard layout")
         return int(hwnd)
 
     def ensure_foreground(self, expected_hwnd: int) -> None:
