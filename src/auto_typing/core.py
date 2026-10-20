@@ -127,35 +127,138 @@ def normalize_source_text(text: str, mode: TypingMode) -> str:
     return normalized
 
 
+class TypingActionKind(str, Enum):
+    """Backend input method for one action, independent of the selected UI mode."""
+
+    PHYSICAL = "physical"
+    UNICODE = "unicode"
+    PASTE = "paste"
+
+
+@dataclass(frozen=True)
+class TypingAction:
+    kind: TypingActionKind
+    value: str
+
+
 @dataclass(frozen=True)
 class TypingPlan:
     mode: TypingMode
     original_text: str
     payload: str
-    keys: tuple[str, ...]
+    actions: tuple[TypingAction, ...]
+
+    @property
+    def keys(self) -> tuple[str, ...]:
+        """Compatibility accessor for the flattened stream of intended key values."""
+        return () if self.mode == TypingMode.PASTE else tuple(self.payload)
 
     @property
     def count(self) -> int:
-        return 1 if self.mode == TypingMode.PASTE else len(self.keys)
+        return len(self.actions)
+
+
+def _hybrid_actions(text: str) -> tuple[TypingAction, ...]:
+    """Convert accented Vietnamese words to Telex keys; bypass IME for English.
+
+    ASCII words and unsupported foreign-language words use VK_PACKET/Unicode,
+    so 'as', 'aw', or 'dd' are never sent to UniKey as Telex commands.
+    Separators use physical keys where possible to delimit IME compositions.
+    """
+    actions: list[TypingAction] = []
+    word: list[str] = []
+
+    def flush_word() -> None:
+        if not word:
+            return
+        original = "".join(word)
+        word.clear()
+        if original.isascii():
+            kind, output = TypingActionKind.UNICODE, original
+        else:
+            try:
+                output = _to_telex_word(original)
+                kind = TypingActionKind.PHYSICAL
+            except ValueError:
+                # Never transliterate foreign words or silently drop characters.
+                kind, output = TypingActionKind.UNICODE, original
+        actions.extend(TypingAction(kind, char) for char in output)
+
+    for char in unicodedata.normalize("NFC", text):
+        if char.isalpha():
+            word.append(char)
+            continue
+
+        flush_word()
+        if char == "\n" or (" " <= char <= "~"):
+            actions.append(TypingAction(TypingActionKind.PHYSICAL, char))
+        else:
+            actions.append(TypingAction(TypingActionKind.UNICODE, char))
+    flush_word()
+    return tuple(actions)
 
 
 def build_plan(text: str, mode: TypingMode) -> TypingPlan:
-    """Validate and freeze the session before switching focus to the target window."""
+    """Validate and freeze the input actions before switching destination focus."""
     if not text:
         raise ValueError("Enter some text before starting")
 
     clean_text = text.replace("\r\n", "\n").replace("\r", "\n")
-    payload = to_telex(clean_text) if mode == TypingMode.TELEX else clean_text
-    keys = () if mode == TypingMode.PASTE else tuple(payload)
 
-    for char in keys:
+    if mode == TypingMode.PASTE:
+        return TypingPlan(
+            mode=mode,
+            original_text=clean_text,
+            payload=clean_text,
+            actions=(TypingAction(TypingActionKind.PASTE, ""),),
+        )
+
+    for char in clean_text:
         if char == "\n":
             continue
         if char in ("\x00", "\t") or unicodedata.category(char).startswith("C"):
             raise ValueError("Control characters and tabs are unsupported in typing modes")
-        if mode in (TypingMode.PHYSICAL, TypingMode.TELEX) and not (" " <= char <= "~"):
+        if mode == TypingMode.PHYSICAL and not (" " <= char <= "~"):
             raise ValueError(
-                f"Physical/Telex mode cannot type {char!r}; use Unicode/Paste mode"
+                f"Physical mode cannot type {char!r}; use Unicode/Hybrid/Paste mode"
             )
 
-    return TypingPlan(mode=mode, original_text=clean_text, payload=payload, keys=keys)
+    if mode == TypingMode.TELEX:
+        actions = _hybrid_actions(clean_text)
+    else:
+        kind = (
+            TypingActionKind.PHYSICAL
+            if mode == TypingMode.PHYSICAL
+            else TypingActionKind.UNICODE
+        )
+        actions = tuple(TypingAction(kind, char) for char in clean_text)
+
+    payload = "".join(action.value for action in actions)
+    return TypingPlan(
+        mode=mode, original_text=clean_text, payload=payload, actions=actions
+    )
+
+
+def format_action_preview(plan: TypingPlan, max_chars: int = 240) -> str:
+    """Preview actual input methods in the mixed plan without leaking markup."""
+    if plan.mode == TypingMode.PASTE:
+        return "(Clipboard paste: original Unicode text)"
+    if plan.mode != TypingMode.TELEX:
+        return plan.payload[:max_chars] + ("…" if len(plan.payload) > max_chars else "")
+
+    groups: list[tuple[TypingActionKind, str]] = []
+    for action in plan.actions:
+        visible = action.value.replace("\n", "↵")
+        if groups and groups[-1][0] == action.kind:
+            previous_kind, previous_text = groups[-1]
+            groups[-1] = (previous_kind, previous_text + visible)
+        else:
+            groups.append((action.kind, visible))
+
+    labels = {
+        TypingActionKind.PHYSICAL: "Keys",
+        TypingActionKind.UNICODE: "Unicode",
+        TypingActionKind.PASTE: "Paste",
+    }
+    result = "  |  ".join(f"[{labels[kind]}] {value}" for kind, value in groups)
+    return result[:max_chars] + ("…" if len(result) > max_chars else "")
