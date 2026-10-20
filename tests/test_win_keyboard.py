@@ -4,6 +4,7 @@ import ctypes
 from types import SimpleNamespace
 
 from auto_typing.win_keyboard import (
+    _INPUT_UNION,
     INPUT,
     KEYBDINPUT,
     KEYEVENTF_KEYUP,
@@ -13,7 +14,6 @@ from auto_typing.win_keyboard import (
     VK_SHIFT,
     VK_V,
     WindowsKeyboard,
-    _INPUT_UNION,
 )
 
 
