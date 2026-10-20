@@ -19,6 +19,13 @@ VK_V = 0x56
 VK_F8 = 0x77
 
 
+# Fixed-width Win32 C types also make ABI tests reliable on non-Windows CI.
+WORD = ctypes.c_uint16
+DWORD = ctypes.c_uint32
+LONG = ctypes.c_int32
+ULONG_PTR = ctypes.c_size_t
+
+
 class KEYBDINPUT(ctypes.Structure):
     _fields_ = [
         ("wVk", WORD),
@@ -58,13 +65,6 @@ class _INPUT_UNION(ctypes.Union):
 
 class INPUT(ctypes.Structure):
     _fields_ = [("type", DWORD), ("union", _INPUT_UNION)]
-
-
-# Fixed-width Win32 C types also make ABI tests reliable on non-Windows CI.
-WORD = ctypes.c_uint16
-DWORD = ctypes.c_uint32
-LONG = ctypes.c_int32
-ULONG_PTR = ctypes.c_size_t
 
 
 WaitFunction = Callable[[float], None]
