@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .core import TypingMode, build_plan, to_telex
+from .core import TypingMode, build_plan, normalize_source_text, to_telex
 from .worker import TypingWorker
 
 STYLE_SHEET = """
@@ -65,6 +65,20 @@ QLabel#panelTitle {
     color: #f1f4fd;
 }
 QLabel#modeHint { color: #9baed0; font-size: 12px; }
+QLabel#textFeedback { color: #9baed0; font-size: 12px; }
+QLabel#textFeedback[state="error"] { color: #ff999b; }
+QLabel#textFeedback[state="notice"] { color: #ffd18a; }
+QPushButton#normalizeButton, QPushButton#unicodeButton {
+    background: #273550;
+    color: #dce6ff;
+    border: 1px solid #465b88;
+    padding: 7px 11px;
+    font-size: 12px;
+    font-weight: 600;
+}
+QPushButton#normalizeButton:hover, QPushButton#unicodeButton:hover {
+    background: #364a70;
+}
 QLabel#preview {
     color: #c8d8ff;
     background: #0e1629;
@@ -232,10 +246,30 @@ class MainWindow(QMainWindow):
         self.editor.setPlaceholderText("Enter the text to type into another application...")
         self.editor.setPlainText("Chào bạn")
         editor_layout.addWidget(self.editor, 1)
-        editor_tip = QLabel("Tip: switch to the target window during the countdown.")
-        editor_tip.setObjectName("secondary")
-        editor_tip.setWordWrap(True)
-        editor_layout.addWidget(editor_tip)
+
+        self.text_feedback = QLabel()
+        self.text_feedback.setObjectName("textFeedback")
+        self.text_feedback.setWordWrap(True)
+        editor_layout.addWidget(self.text_feedback)
+
+        text_actions = QHBoxLayout()
+        text_actions.setSpacing(8)
+        self.normalize_button = QPushButton("Normalize text")
+        self.normalize_button.setObjectName("normalizeButton")
+        self.normalize_button.setToolTip(
+            "Normalize accented characters, pasted spaces and punctuation. "
+            "Unsupported emoji or foreign-language characters are never removed."
+        )
+        self.unicode_button = QPushButton("Use Unicode")
+        self.unicode_button.setObjectName("unicodeButton")
+        self.unicode_button.setToolTip(
+            "Switch to Unicode Typing to preserve characters that physical keys cannot type."
+        )
+        text_actions.addWidget(self.normalize_button)
+        text_actions.addWidget(self.unicode_button)
+        text_actions.addStretch(1)
+        editor_layout.addLayout(text_actions)
+
         workspace.addWidget(editor_panel, 5)
 
         options_panel = QFrame()
@@ -359,6 +393,8 @@ class MainWindow(QMainWindow):
 
         self.editor.textChanged.connect(self._update_preview)
         self.mode.currentIndexChanged.connect(self._update_preview)
+        self.normalize_button.clicked.connect(self._normalize_text)
+        self.unicode_button.clicked.connect(self._switch_to_unicode)
         self.start_button.clicked.connect(self._start)
         self.stop_button.clicked.connect(self._stop)
         self._update_preview()
@@ -368,6 +404,46 @@ class MainWindow(QMainWindow):
         mode = self.mode.currentData()
         self.char_count.setText(f"{len(text):,} characters")
         self.mode_hint.setText(_MODE_HINTS.get(mode, ""))
+        normalized = normalize_source_text(text, mode)
+        can_normalize = normalized != text
+        self.normalize_button.setVisible(can_normalize and self.worker is None)
+
+        try:
+            build_plan(text, mode)
+            validation_error = None
+        except ValueError as error:
+            validation_error = str(error)
+
+        # If text cannot be simulated by physical/Telex keys, never strip the
+        # unsupported characters: offer the Unicode input mode instead.
+        can_use_unicode = False
+        if validation_error and mode in (TypingMode.PHYSICAL, TypingMode.TELEX):
+            try:
+                build_plan(text, TypingMode.UNICODE)
+                can_use_unicode = True
+            except ValueError:
+                pass
+        self.unicode_button.setVisible(can_use_unicode and self.worker is None)
+
+        if validation_error:
+            self.text_feedback.setText(f"Input needs attention: {validation_error}")
+            state = "error"
+        elif can_normalize:
+            self.text_feedback.setText(
+                "Pasted formatting detected. Normalize text for consistent typing."
+            )
+            state = "notice"
+        else:
+            self.text_feedback.setText(
+                "Ready to type. Switch to the destination window after starting."
+            )
+            state = ""
+        self.text_feedback.setProperty("state", state)
+        self.text_feedback.style().unpolish(self.text_feedback)
+        self.text_feedback.style().polish(self.text_feedback)
+        if self.worker is None:
+            self.start_button.setEnabled(validation_error is None)
+
         try:
             if mode == TypingMode.TELEX:
                 preview = to_telex(text)
@@ -376,8 +452,24 @@ class MainWindow(QMainWindow):
             else:
                 preview = text
         except ValueError as error:
-            preview = f"Invalid Telex input: {error}"
+            preview = f"Cannot preview Telex: {error}"
         self.preview.setText(preview[:240] + ("…" if len(preview) > 240 else ""))
+
+    def _normalize_text(self) -> None:
+        original = self.editor.toPlainText()
+        normalized = normalize_source_text(original, self.mode.currentData())
+        if normalized != original:
+            # Replacement stays in the text editor's undo history.
+            cursor = self.editor.textCursor()
+            cursor.beginEditBlock()
+            cursor.select(cursor.SelectionType.Document)
+            cursor.insertText(normalized)
+            cursor.endEditBlock()
+
+    def _switch_to_unicode(self) -> None:
+        index = self.mode.findData(TypingMode.UNICODE)
+        if index >= 0:
+            self.mode.setCurrentIndex(index)
 
     def _set_status(self, message: str, state: str = "") -> None:
         self.status.setText(message)
@@ -438,6 +530,8 @@ class MainWindow(QMainWindow):
         self.stop_button.setEnabled(True)
         self.editor.setReadOnly(True)
         self.mode.setEnabled(False)
+        self.normalize_button.setVisible(False)
+        self.unicode_button.setVisible(False)
         self.delay.setEnabled(False)
         self.interval.setEnabled(False)
         self.hold.setEnabled(False)
@@ -460,6 +554,7 @@ class MainWindow(QMainWindow):
         self.delay.setEnabled(True)
         self.interval.setEnabled(True)
         self.hold.setEnabled(True)
+        self._update_preview()
 
     def closeEvent(self, event) -> None:
         if self.worker and self.worker.isRunning():
