@@ -2,12 +2,12 @@
 
 import os
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
 from PySide6.QtWidgets import QApplication
 
 from auto_typing.core import TypingMode
 from auto_typing.ui import MainWindow
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 def test_default_workspace_and_telex_preview() -> None:
@@ -21,6 +21,7 @@ def test_default_workspace_and_telex_preview() -> None:
         assert not window.stop_button.isEnabled()
     finally:
         window.close()
+        app.processEvents()
 
 
 def test_preview_updates_when_switching_modes() -> None:
@@ -35,3 +36,4 @@ def test_preview_updates_when_switching_modes() -> None:
         assert window.preview.text() == "(Clipboard paste: original Unicode text)"
     finally:
         window.close()
+        app.processEvents()
