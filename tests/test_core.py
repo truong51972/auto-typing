@@ -2,7 +2,7 @@
 
 import pytest
 
-from auto_typing.core import TypingMode, build_plan, to_telex
+from auto_typing.core import TypingMode, build_plan, normalize_source_text, to_telex
 
 
 @pytest.mark.parametrize(
@@ -87,3 +87,36 @@ def test_newlines_are_normalized() -> None:
 def test_tab_is_rejected_in_keystroke_modes() -> None:
     with pytest.raises(ValueError, match="Control characters"):
         build_plan("A\tB", TypingMode.UNICODE)
+
+
+@pytest.mark.parametrize(
+    ("source", "mode", "expected"),
+    [
+        ("Cha\\u0300o ba\\u0323n", TypingMode.TELEX, "Chào bạn"),
+        ("Chào\\u00a0bạn", TypingMode.TELEX, "Chào bạn"),
+        ("Chào\\u200bbạn", TypingMode.TELEX, "Chàobạn"),
+        ("Hello\\tworld", TypingMode.UNICODE, "Hello    world"),
+        ("“Hello” — world…", TypingMode.PHYSICAL, '"Hello" - world...'),
+        ("ＡＢＣ１２３", TypingMode.PHYSICAL, "ABC123"),
+        ("Hi 😊", TypingMode.TELEX, "Hi 😊"),
+        ("“Hello” — world…", TypingMode.UNICODE, "“Hello” — world…"),
+        ("Hello\\tworld", TypingMode.PASTE, "Hello\\tworld"),
+    ],
+)
+def test_normalize_source_text(source: str, mode: TypingMode, expected: str) -> None:
+    assert normalize_source_text(source, mode) == expected
+
+
+def test_normalization_is_idempotent() -> None:
+    source = "“Chào\\u00a0bạn” …"
+    first = normalize_source_text(source, TypingMode.TELEX)
+    assert normalize_source_text(first, TypingMode.TELEX) == first
+    assert build_plan(first, TypingMode.TELEX).payload == '"Chaof banj" ...'
+
+
+def test_unsupported_letters_are_not_silently_transliterated() -> None:
+    normalized = normalize_source_text("Zażółć 😊", TypingMode.TELEX)
+    assert normalized == "Zażółć 😊"
+    with pytest.raises(ValueError):
+        build_plan(normalized, TypingMode.TELEX)
+    assert build_plan(normalized, TypingMode.UNICODE).original_text == normalized
