@@ -8,7 +8,6 @@ import sys
 from collections.abc import Callable
 from ctypes import wintypes
 
-
 INPUT_KEYBOARD = 1
 KEYEVENTF_KEYUP = 0x0002
 KEYEVENTF_UNICODE = 0x0004
