@@ -25,7 +25,6 @@ from PySide6.QtWidgets import (
 from .core import TypingMode, build_plan, to_telex
 from .worker import TypingWorker
 
-
 STYLE_SHEET = """
 QMainWindow, QWidget#appBody {
     background: #0b1020;
