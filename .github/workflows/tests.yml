@@ -1,0 +1,29 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Install Qt runtime libraries (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: uv sync --group dev
+      - name: Run tests
+        env:
+          QT_QPA_PLATFORM: ${{ runner.os == 'Linux' && 'offscreen' || 'windows' }}
+        run: uv run pytest -q
+      - name: Lint
+        run: uv run ruff check .

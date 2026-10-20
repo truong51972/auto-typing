@@ -1,8 +1,8 @@
 # Auto Typing
 
-A small local-first Windows desktop typing utility built with Python + PySide6.
+A local-first Windows desktop typing utility built with Python + PySide6. Its dark, two-column workspace separates source text from typing settings, with a live keystroke preview and progress feedback.
 
-> **Prototype / Phase 0:** Synthetic Win32 input has not yet been verified against a real UniKey installation. Test in Notepad with harmless sample text before using other applications.
+> **Windows acceptance testing required:** The Win32 `SendInput` ABI-size bug that caused error 87 has been fixed, but real UniKey and target-application behavior still need manual verification. Test in Notepad with harmless sample text first.
 
 ## Modes
 
@@ -12,6 +12,8 @@ A small local-first Windows desktop typing utility built with Python + PySide6.
 - **Telex Typing (UniKey)** — converts Vietnamese Unicode to Telex keystrokes, then uses Physical Typing. Requires UniKey in Vietnamese/Telex mode, Unicode encoding, and Caps Lock off.
 
 Examples: `Chào bạn` → `Chaof banj`, `Tiếng Việt` → `Tieengs Vieetj`, `Đường` → `Dduwowngf`.
+
+**Keyboard implementation:** Physical and Telex typing use `VkKeyScanExW` to map each ASCII character through the destination window's Windows keyboard layout. This avoids a brittle hardcoded mapping table or an additional PyAutoGUI dependency. Unicode typing uses native UTF-16 `SendInput` events (which PyAutoGUI's `write()` cannot replace). The `INPUT` union includes all Win32 variants to preserve the required 40-byte x64 / 28-byte x86 ABI size.
 
 **Limitations:** Telex is an input method, not a lossless character encoding. Latin-language words, URLs and code can be interpreted as Telex commands by the destination IME; mixed-language text is not guaranteed. Physical/Telex modes cannot inject emoji or arbitrary Unicode; use Unicode Typing or Clipboard Paste instead. Character mapping depends on the Windows keyboard layout and application. Elevated applications can reject input injected from a normal-permission process. Windows is currently the only supported injection backend.
 
@@ -58,7 +60,8 @@ src/auto_typing/
   ui.py           # PySide6 main window
   main.py         # desktop entry point
 tests/
-  test_core.py    # pure converter/plan tests
+  test_core.py          # pure converter/plan tests
+  test_win_keyboard.py  # INPUT ABI and synthetic-event tests
 ```
 
 ## Next steps

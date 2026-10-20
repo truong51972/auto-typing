@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from threading import Event
 import time
+from threading import Event
 
 from PySide6.QtCore import QThread, Signal
 
@@ -74,5 +74,5 @@ class TypingWorker(QThread):
             self.result.emit("Completed")
         except _Stopped:
             self.result.emit("Stopped")
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 - worker must report unexpected failures
             self.result.emit(f"Failed: {error}")

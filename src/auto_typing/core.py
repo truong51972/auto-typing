@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import unicodedata
 from dataclasses import dataclass
 from enum import Enum
-import unicodedata
 
 
 class TypingMode(str, Enum):
