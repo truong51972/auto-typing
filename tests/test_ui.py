@@ -83,7 +83,7 @@ def test_normalize_button_repairs_pasted_text() -> None:
     app = QApplication.instance() or QApplication([])
     window = MainWindow()
     try:
-        window.editor.setPlainText("“Chào\\u00a0bạn”")
+        window.editor.setPlainText("“Chào\u00a0bạn”")
         window.show()
         app.processEvents()
 
