@@ -36,8 +36,11 @@ uv run ruff check .
 
 ## Usage
 
-1. Enter your text, select a mode, and inspect the Telex preview when applicable.
-2. Choose the start delay, interval (time between key starts), and key-hold duration.
+1. Enter your text, select a mode, and inspect the Telex preview when applicable. Invalid input is explained inline and **Start** is disabled until the selected mode can represent it.
+   - Choose **Normalize text** if the source contains decomposed accents, copy/pasted spacing, tabs, or smart punctuation incompatible with Physical/Telex typing. Changes are opt-in and can be undone in the editor.
+   - Choose **Use Unicode** when a character such as an emoji or a non-Vietnamese accented letter cannot be converted into physical/Telex keys. No unsupported letters or emoji are discarded.
+   - Normalization uses Unicode NFC, and NFKC for physical/Telex compatibility where appropriate; review the updated text because compatibility normalization can change typographic presentation.
+2. Choose the start delay, interval (time between key starts), and key-hold duration. The **Typing settings** panel scrolls vertically when the window is small, keeping **Start** and **Stop** visible.
 3. Click **Start**, then focus the **destination window** before the countdown finishes.
 4. Press **F8** while the utility is typing to request an emergency stop. The physical F8 keystroke may also reach the destination application. Alternatively return to the utility and press **Stop**.
 
@@ -62,6 +65,7 @@ src/auto_typing/
 tests/
   test_core.py          # pure converter/plan tests
   test_win_keyboard.py  # INPUT ABI and synthetic-event tests
+  test_ui.py            # UI validation, normalization and responsive layout tests
 ```
 
 ## Next steps

@@ -86,6 +86,47 @@ def to_telex(text: str) -> str:
     return "".join(out)
 
 
+
+# Explicit, opt-in cleanup for characters commonly introduced by copy/paste.
+# These changes are deliberately conservative: unsupported letters/emoji remain
+# untouched so the UI can offer Unicode mode instead of silently dropping data.
+_SPACE_TRANSLATION = str.maketrans({
+    "\u00a0": " ",  # non-breaking space
+    "\u2007": " ",  # figure space
+    "\u202f": " ",  # narrow no-break space
+    "\u200b": "",   # zero-width space
+    "\ufeff": "",   # byte-order mark within pasted text
+})
+_ASCII_PUNCTUATION = str.maketrans({
+    "\u2018": "'",
+    "\u2019": "'",
+    "\u201c": '"',
+    "\u201d": '"',
+    "\u2013": "-",
+    "\u2014": "-",
+    "\u2212": "-",
+    "\u2026": "...",
+})
+
+
+def normalize_source_text(text: str, mode: TypingMode) -> str:
+    """Prepare pasted text for a typing mode without transliterating or losing letters.
+
+    The user must explicitly request this transformation in the UI.
+    Characters that cannot be represented by Physical/Telex (e.g., emoji and
+    foreign-language diacritics) remain intact for proper validation.
+    """
+    normalized = unicodedata.normalize("NFC", text)
+    normalized = normalized.replace("\r\n", "\n").replace("\r", "\n")
+    if mode == TypingMode.PASTE:
+        return normalized
+    normalized = normalized.translate(_SPACE_TRANSLATION).replace("\t", "    ")
+    if mode in (TypingMode.PHYSICAL, TypingMode.TELEX):
+        normalized = unicodedata.normalize("NFKC", normalized)
+        normalized = normalized.translate(_ASCII_PUNCTUATION)
+    return normalized
+
+
 @dataclass(frozen=True)
 class TypingPlan:
     mode: TypingMode
