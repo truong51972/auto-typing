@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import ctypes
-from ctypes import wintypes
 import os
 import sys
-from typing import Callable
+from collections.abc import Callable
+from ctypes import wintypes
 
 
 INPUT_KEYBOARD = 1
