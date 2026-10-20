@@ -12,11 +12,14 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
+    QScrollArea,
+    QSizePolicy,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -77,6 +80,10 @@ QFrame#panel {
     background: #151e31;
     border: 1px solid #2b3750;
     border-radius: 16px;
+}
+QScrollArea#settingsScroll, QWidget#settingsContent {
+    background: transparent;
+    border: 0;
 }
 QPlainTextEdit, QComboBox, QSpinBox, QDoubleSpinBox {
     background: #0d1628;
@@ -174,15 +181,15 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Auto Typing")
         self.resize(970, 700)
-        self.setMinimumSize(790, 620)
+        self.setMinimumSize(700, 500)
         self.setStyleSheet(STYLE_SHEET)
         self.worker: TypingWorker | None = None
 
         body = QWidget()
         body.setObjectName("appBody")
         root = QVBoxLayout(body)
-        root.setContentsMargins(28, 24, 28, 26)
-        root.setSpacing(18)
+        root.setContentsMargins(20, 16, 20, 18)
+        root.setSpacing(12)
         self.setCentralWidget(body)
 
         header = QHBoxLayout()
@@ -203,7 +210,7 @@ class MainWindow(QMainWindow):
         root.addLayout(header)
 
         workspace = QHBoxLayout()
-        workspace.setSpacing(16)
+        workspace.setSpacing(12)
         root.addLayout(workspace, 1)
 
         editor_panel = QFrame()
@@ -235,12 +242,32 @@ class MainWindow(QMainWindow):
         options_panel.setObjectName("panel")
         options_panel.setMinimumWidth(272)
         options_layout = QVBoxLayout(options_panel)
-        options_layout.setContentsMargins(20, 18, 20, 20)
-        options_layout.setSpacing(12)
+        options_layout.setContentsMargins(16, 16, 16, 16)
+        options_layout.setSpacing(10)
         options_heading = QLabel("Typing settings")
         options_heading.setObjectName("panelTitle")
         options_layout.addWidget(options_heading)
-        options_layout.addWidget(_eyebrow("OUTPUT MODE"))
+
+        # Keep primary actions visible when the settings exceed the available height.
+        # A vertical scroll area prevents the Timing form from colliding with them.
+        self.settings_scroll = QScrollArea()
+        self.settings_scroll.setObjectName("settingsScroll")
+        self.settings_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.settings_scroll.setWidgetResizable(True)
+        self.settings_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.settings_scroll.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        settings_content = QWidget()
+        settings_content.setObjectName("settingsContent")
+        settings_content.setAutoFillBackground(False)
+        settings_layout = QVBoxLayout(settings_content)
+        settings_layout.setContentsMargins(0, 0, 8, 0)
+        settings_layout.setSpacing(9)
+        settings_layout.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
+        settings_layout.addWidget(_eyebrow("OUTPUT MODE"))
 
         self.mode = QComboBox()
         self.mode.addItem("Clipboard Paste", TypingMode.PASTE)
@@ -248,45 +275,61 @@ class MainWindow(QMainWindow):
         self.mode.addItem("Physical Typing", TypingMode.PHYSICAL)
         self.mode.addItem("Telex Typing (UniKey)", TypingMode.TELEX)
         self.mode.setCurrentIndex(3)
-        options_layout.addWidget(self.mode)
+        settings_layout.addWidget(self.mode)
         self.mode_hint = QLabel()
         self.mode_hint.setObjectName("modeHint")
         self.mode_hint.setWordWrap(True)
         self.mode_hint.setMinimumHeight(42)
-        options_layout.addWidget(self.mode_hint)
+        settings_layout.addWidget(self.mode_hint)
 
-        options_layout.addWidget(_eyebrow("TIMING"))
-        timing = QFormLayout()
-        timing.setVerticalSpacing(12)
-        timing.setHorizontalSpacing(12)
+        settings_layout.addWidget(_eyebrow("TIMING"))
+        self.timing_form = QFormLayout()
+        self.timing_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        self.timing_form.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow
+        )
+        self.timing_form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.timing_form.setVerticalSpacing(9)
+        self.timing_form.setHorizontalSpacing(8)
         self.delay = QDoubleSpinBox()
         self.delay.setRange(0.5, 30)
         self.delay.setSingleStep(0.5)
         self.delay.setValue(3)
         self.delay.setSuffix(" s")
-        timing.addRow("Start delay", self.delay)
+        self.delay.setMinimumWidth(110)
+        self.delay.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.timing_form.addRow("Start delay", self.delay)
 
         self.interval = QSpinBox()
         self.interval.setRange(10, 5000)
         self.interval.setValue(120)
         self.interval.setSuffix(" ms")
-        timing.addRow("Key interval", self.interval)
+        self.interval.setMinimumWidth(110)
+        self.interval.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.timing_form.addRow("Key interval", self.interval)
 
         self.hold = QSpinBox()
         self.hold.setRange(1, 500)
         self.hold.setValue(20)
         self.hold.setSuffix(" ms")
-        timing.addRow("Key hold", self.hold)
-        options_layout.addLayout(timing)
-        options_layout.addStretch(1)
+        self.hold.setMinimumWidth(110)
+        self.hold.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.timing_form.addRow("Key hold", self.hold)
+        settings_layout.addLayout(self.timing_form)
+        settings_layout.addStretch(1)
+        self.settings_scroll.setWidget(settings_content)
+        options_layout.addWidget(self.settings_scroll, 1)
 
-        self.start_button = QPushButton("Start typing")
+        self.start_button = QPushButton("Start")
         self.start_button.setObjectName("startButton")
         self.stop_button = QPushButton("Stop  ·  F8")
         self.stop_button.setObjectName("stopButton")
         self.stop_button.setEnabled(False)
-        options_layout.addWidget(self.start_button)
-        options_layout.addWidget(self.stop_button)
+        actions = QHBoxLayout()
+        actions.setSpacing(8)
+        actions.addWidget(self.start_button, 1)
+        actions.addWidget(self.stop_button, 1)
+        options_layout.addLayout(actions)
         workspace.addWidget(options_panel, 3)
 
         preview_panel = QFrame()
