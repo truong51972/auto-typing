@@ -246,19 +246,18 @@ def format_action_preview(plan: TypingPlan, max_chars: int = 240) -> str:
     if plan.mode != TypingMode.TELEX:
         return plan.payload[:max_chars] + ("…" if len(plan.payload) > max_chars else "")
 
-    groups: list[tuple[TypingActionKind, str]] = []
+    groups: list[tuple[TypingActionKind, list[str]]] = []
     for action in plan.actions:
         visible = action.value.replace("\n", "↵")
         if groups and groups[-1][0] == action.kind:
-            previous_kind, previous_text = groups[-1]
-            groups[-1] = (previous_kind, previous_text + visible)
+            groups[-1][1].append(visible)
         else:
-            groups.append((action.kind, visible))
+            groups.append((action.kind, [visible]))
 
     labels = {
         TypingActionKind.PHYSICAL: "Keys",
         TypingActionKind.UNICODE: "Unicode",
         TypingActionKind.PASTE: "Paste",
     }
-    result = "  |  ".join(f"[{labels[kind]}] {value}" for kind, value in groups)
+    result = "  |  ".join(f"[{labels[kind]}] {''.join(value)}" for kind, value in groups)
     return result[:max_chars] + ("…" if len(result) > max_chars else "")
