@@ -21,11 +21,11 @@ VK_F8 = 0x77
 
 class KEYBDINPUT(ctypes.Structure):
     _fields_ = [
-        ("wVk", wintypes.WORD),
-        ("wScan", wintypes.WORD),
-        ("dwFlags", wintypes.DWORD),
-        ("time", wintypes.DWORD),
-        ("dwExtraInfo", ctypes.c_size_t),
+        ("wVk", WORD),
+        ("wScan", WORD),
+        ("dwFlags", DWORD),
+        ("time", DWORD),
+        ("dwExtraInfo", ULONG_PTR),
     ]
 
 
@@ -33,20 +33,20 @@ class MOUSEINPUT(ctypes.Structure):
     """Largest Win32 INPUT variant; required for the union's native ABI size."""
 
     _fields_ = [
-        ("dx", wintypes.LONG),
-        ("dy", wintypes.LONG),
-        ("mouseData", wintypes.DWORD),
-        ("dwFlags", wintypes.DWORD),
-        ("time", wintypes.DWORD),
-        ("dwExtraInfo", ctypes.c_size_t),
+        ("dx", LONG),
+        ("dy", LONG),
+        ("mouseData", DWORD),
+        ("dwFlags", DWORD),
+        ("time", DWORD),
+        ("dwExtraInfo", ULONG_PTR),
     ]
 
 
 class HARDWAREINPUT(ctypes.Structure):
     _fields_ = [
-        ("uMsg", wintypes.DWORD),
-        ("wParamL", wintypes.WORD),
-        ("wParamH", wintypes.WORD),
+        ("uMsg", DWORD),
+        ("wParamL", WORD),
+        ("wParamH", WORD),
     ]
 
 
@@ -57,7 +57,14 @@ class _INPUT_UNION(ctypes.Union):
 
 
 class INPUT(ctypes.Structure):
-    _fields_ = [("type", wintypes.DWORD), ("union", _INPUT_UNION)]
+    _fields_ = [("type", DWORD), ("union", _INPUT_UNION)]
+
+
+# Fixed-width Win32 C types also make ABI tests reliable on non-Windows CI.
+WORD = ctypes.c_uint16
+DWORD = ctypes.c_uint32
+LONG = ctypes.c_int32
+ULONG_PTR = ctypes.c_size_t
 
 
 WaitFunction = Callable[[float], None]
