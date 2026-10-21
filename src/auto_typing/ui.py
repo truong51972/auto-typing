@@ -339,7 +339,7 @@ class MainWindow(QMainWindow):
 
         self.interval = QSpinBox()
         self.interval.setRange(10, 5000)
-        self.interval.setValue(120)
+        self.interval.setValue(10)
         self.interval.setSuffix(" ms")
         self.interval.setMinimumWidth(110)
         self.interval.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -347,7 +347,7 @@ class MainWindow(QMainWindow):
 
         self.hold = QSpinBox()
         self.hold.setRange(1, 500)
-        self.hold.setValue(20)
+        self.hold.setValue(5)
         self.hold.setSuffix(" ms")
         self.hold.setMinimumWidth(110)
         self.hold.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
