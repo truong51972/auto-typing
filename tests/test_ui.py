@@ -163,4 +163,4 @@ def test_release_version_matches_project_metadata() -> None:
 
     from auto_typing import __version__
 
-    assert __version__ == version("auto-typing") == "1.0.0"
+    assert __version__ == version("auto-typing")
