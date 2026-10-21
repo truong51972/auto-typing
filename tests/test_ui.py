@@ -18,7 +18,7 @@ def test_default_workspace_and_telex_preview() -> None:
     try:
         assert window.windowTitle() == "Auto Typing"
         assert window.mode.currentData() == TypingMode.TELEX
-        assert window.preview.text() == "Chaof banj"
+        assert window.preview.text() == "[Keys] Chaof banj"
         assert window.start_button.isEnabled()
         assert not window.stop_button.isEnabled()
     finally:
@@ -31,7 +31,7 @@ def test_preview_updates_when_switching_modes() -> None:
     window = MainWindow()
     try:
         window.editor.setPlainText("Tiếng Việt")
-        assert window.preview.text() == "Tieengs Vieetj"
+        assert window.preview.text() == "[Keys] Tieengs Vieetj"
         window.mode.setCurrentIndex(1)
         assert window.preview.text() == "Tiếng Việt"
         window.mode.setCurrentIndex(0)
@@ -88,12 +88,12 @@ def test_normalize_button_repairs_pasted_text() -> None:
         app.processEvents()
 
         assert window.normalize_button.isVisible()
-        assert not window.start_button.isEnabled()
+        assert window.start_button.isEnabled()
         window.normalize_button.click()
         app.processEvents()
 
         assert window.editor.toPlainText() == '"Chào bạn"'
-        assert window.preview.text() == '"Chaof banj"'
+        assert window.preview.text() == '[Keys] "Chaof banj"'
         assert window.start_button.isEnabled()
         assert not window.normalize_button.isVisible()
     finally:
@@ -101,10 +101,11 @@ def test_normalize_button_repairs_pasted_text() -> None:
         app.processEvents()
 
 
-def test_invalid_telex_input_offers_lossless_unicode_mode() -> None:
+def test_invalid_physical_input_offers_lossless_unicode_mode() -> None:
     app = QApplication.instance() or QApplication([])
     window = MainWindow()
     try:
+        window.mode.setCurrentIndex(2)  # Physical-only mode
         window.editor.setPlainText("Xin chào 😊")
         window.show()
         app.processEvents()
@@ -116,6 +117,27 @@ def test_invalid_telex_input_offers_lossless_unicode_mode() -> None:
 
         assert window.mode.currentData() == TypingMode.UNICODE
         assert window.editor.toPlainText() == "Xin chào 😊"
+        assert window.start_button.isEnabled()
+        assert not window.unicode_button.isVisible()
+    finally:
+        window.close()
+        app.processEvents()
+
+
+
+def test_hybrid_preview_shows_physical_and_unicode_actions_for_mixed_text() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+    try:
+        window.editor.setPlainText("as Chào dd 😊")
+        window.show()
+        app.processEvents()
+
+        preview = window.preview.text()
+        assert preview.startswith("[Unicode] as")
+        assert "[Keys]  Chaof " in preview
+        assert "[Unicode] dd" in preview
+        assert "[Unicode] 😊" in preview
         assert window.start_button.isEnabled()
         assert not window.unicode_button.isVisible()
     finally:

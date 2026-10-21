@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .core import TypingMode, build_plan, normalize_source_text, to_telex
+from .core import TypingMode, build_plan, format_action_preview, normalize_source_text
 from .worker import TypingWorker
 
 STYLE_SHEET = """
@@ -180,7 +180,10 @@ _MODE_HINTS = {
     TypingMode.PASTE: "Fast insert via Ctrl+V. Your clipboard is replaced.",
     TypingMode.UNICODE: "Enter Unicode characters directly; UniKey is not required.",
     TypingMode.PHYSICAL: "Simulate real ASCII keystrokes using the target keyboard layout.",
-    TypingMode.TELEX: "Send physical Telex keys. Enable UniKey Vietnamese / Telex first.",
+    TypingMode.TELEX: (
+        "Mixed English / Vietnamese: Unicode for plain words, physical Telex for "
+        "accented Vietnamese. Enable UniKey Vietnamese / Telex."
+    ),
 }
 
 
@@ -307,7 +310,7 @@ class MainWindow(QMainWindow):
         self.mode.addItem("Clipboard Paste", TypingMode.PASTE)
         self.mode.addItem("Unicode Typing", TypingMode.UNICODE)
         self.mode.addItem("Physical Typing", TypingMode.PHYSICAL)
-        self.mode.addItem("Telex Typing (UniKey)", TypingMode.TELEX)
+        self.mode.addItem("Hybrid Typing (UniKey)", TypingMode.TELEX)
         self.mode.setCurrentIndex(3)
         settings_layout.addWidget(self.mode)
         self.mode_hint = QLabel()
@@ -409,15 +412,16 @@ class MainWindow(QMainWindow):
         self.normalize_button.setVisible(can_normalize and self.worker is None)
 
         try:
-            build_plan(text, mode)
+            plan = build_plan(text, mode)
             validation_error = None
         except ValueError as error:
+            plan = None
             validation_error = str(error)
 
-        # If text cannot be simulated by physical/Telex keys, never strip the
-        # unsupported characters: offer the Unicode input mode instead.
+        # Hybrid Typing already falls back to Unicode for unsupported words.
+        # Physical-only mode still needs an explicit mode switch.
         can_use_unicode = False
-        if validation_error and mode in (TypingMode.PHYSICAL, TypingMode.TELEX):
+        if validation_error and mode == TypingMode.PHYSICAL:
             try:
                 build_plan(text, TypingMode.UNICODE)
                 can_use_unicode = True
@@ -444,16 +448,9 @@ class MainWindow(QMainWindow):
         if self.worker is None:
             self.start_button.setEnabled(validation_error is None)
 
-        try:
-            if mode == TypingMode.TELEX:
-                preview = to_telex(text)
-            elif mode == TypingMode.PASTE:
-                preview = "(Clipboard paste: original Unicode text)"
-            else:
-                preview = text
-        except ValueError as error:
-            preview = f"Cannot preview Telex: {error}"
-        self.preview.setText(preview[:240] + ("…" if len(preview) > 240 else ""))
+        self.preview.setText(
+            format_action_preview(plan) if plan is not None else f"Cannot preview: {validation_error}"
+        )
 
     def _normalize_text(self) -> None:
         original = self.editor.toPlainText()

@@ -7,7 +7,7 @@ from threading import Event
 
 from PySide6.QtCore import QThread, Signal
 
-from .core import TypingMode, TypingPlan
+from .core import TypingActionKind, TypingPlan
 from .win_keyboard import WindowsKeyboard
 
 
@@ -54,19 +54,18 @@ class TypingWorker(QThread):
             keyboard = WindowsKeyboard()
             self._wait(self.start_delay, keyboard)
             target = keyboard.capture_foreground_target()
-            keys = (None,) if self.plan.mode == TypingMode.PASTE else self.plan.keys
-            total = len(keys)
+            total = self.plan.count
 
-            for index, char in enumerate(keys, start=1):
+            for index, action in enumerate(self.plan.actions, start=1):
                 self._check_cancelled(keyboard)
                 keyboard.ensure_foreground(target)
                 wait = lambda seconds: self._wait(seconds, keyboard)
-                if self.plan.mode == TypingMode.PASTE:
+                if action.kind == TypingActionKind.PASTE:
                     keyboard.paste(self.hold_seconds, wait)
-                elif self.plan.mode == TypingMode.UNICODE:
-                    keyboard.type_unicode(char, self.hold_seconds, wait)
+                elif action.kind == TypingActionKind.UNICODE:
+                    keyboard.type_unicode(action.value, self.hold_seconds, wait)
                 else:
-                    keyboard.type_physical(char, self.hold_seconds, wait)
+                    keyboard.type_physical(action.value, self.hold_seconds, wait)
                 self.progress.emit(index, total)
                 if index < total:
                     self._wait(max(0.0, self.interval_seconds - self.hold_seconds), keyboard)
