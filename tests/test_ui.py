@@ -143,3 +143,16 @@ def test_hybrid_preview_shows_physical_and_unicode_actions_for_mixed_text() -> N
     finally:
         window.close()
         app.processEvents()
+
+
+def test_faster_default_timing_values() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+    try:
+        assert window.interval.value() == 10
+        assert window.hold.value() == 5
+        assert window.delay.value() == 3
+        assert window.hold.value() < window.interval.value()
+    finally:
+        window.close()
+        app.processEvents()
