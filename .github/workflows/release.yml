@@ -1,0 +1,121 @@
+name: Windows executable and release
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    name: Build and smoke-test Windows EXE
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install application and packaging dependencies
+        run: uv sync --no-dev --group build
+
+      - name: Package a standalone Windows application
+        run: >-
+          uv run --no-dev --group build pyinstaller
+          --noconfirm --clean --onefile --windowed
+          --name AutoTyping --paths src
+          scripts/auto_typing_entry.py
+
+      - name: Smoke-test the frozen desktop application
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $exe = (Resolve-Path "dist/AutoTyping.exe").Path
+          $process = Start-Process -FilePath $exe -ArgumentList "--smoke-test" -PassThru
+          if (-not $process.WaitForExit(90000)) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            throw "Frozen GUI did not complete its smoke test in 90 seconds"
+          }
+          if ($process.ExitCode -ne 0) {
+            throw "Frozen GUI smoke test failed with exit code $($process.ExitCode)"
+          }
+
+      - name: Name the EXE and generate SHA-256 checksum
+        shell: pwsh
+        run: |
+          $version = (& uv run --no-dev --group build python -c "from auto_typing import __version__; print(__version__)").Trim()
+          $name = "AutoTyping-v$version-windows-x64.exe"
+          Move-Item -LiteralPath "dist/AutoTyping.exe" -Destination "dist/$name"
+          $digest = (Get-FileHash -LiteralPath "dist/$name" -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -LiteralPath "dist/SHA256SUMS.txt" -Value "$digest  $name" -Encoding ascii
+          Write-Host "Prepared $name ($digest)"
+
+      - name: Retain the downloadable Windows executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoTyping-windows-x64
+          path: |
+            dist/AutoTyping-v*-windows-x64.exe
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish versioned GitHub Release
+    needs: build-windows
+    # PR and manual builds never publish. Main pushes publish only a new version;
+    # version tags can also publish explicitly after passing the Windows smoke test.
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: AutoTyping-windows-x64
+          path: dist
+
+      - name: Create the matching tag and publish release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          tag="v${version}"
+          asset="AutoTyping-${tag}-windows-x64.exe"
+
+          if [[ "$GITHUB_REF" == refs/tags/* && "$GITHUB_REF_NAME" != "$tag" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match pyproject.toml version $tag"
+            exit 1
+          fi
+
+          (cd dist && sha256sum --check SHA256SUMS.txt)
+          test -s "dist/$asset"
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "GitHub Release $tag already exists; leaving published assets unchanged."
+            exit 0
+          fi
+
+          notes="docs/releases/${tag}.md"
+          if [[ -f "$notes" ]]; then
+            gh release create "$tag" "dist/$asset" "dist/SHA256SUMS.txt" \
+              --target "$GITHUB_SHA" --title "Auto Typing $tag" --notes-file "$notes"
+          else
+            gh release create "$tag" "dist/$asset" "dist/SHA256SUMS.txt" \
+              --target "$GITHUB_SHA" --title "Auto Typing $tag" --generate-notes
+          fi
+
+          gh release view "$tag" --json assets --jq '.assets[].name' | grep -Fx "$asset"
