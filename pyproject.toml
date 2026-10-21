@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "auto-typing"
-version = "0.1.0"
+version = "1.0.0"
 description = "Local desktop text insertion and keyboard typing utility"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -15,6 +15,7 @@ auto-typing = "auto_typing.main:main"
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.9"]
+build = ["pyinstaller>=6.16,<7"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/auto_typing"]

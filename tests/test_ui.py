@@ -156,3 +156,11 @@ def test_faster_default_timing_values() -> None:
     finally:
         window.close()
         app.processEvents()
+
+
+def test_release_version_matches_project_metadata() -> None:
+    from importlib.metadata import version
+
+    from auto_typing import __version__
+
+    assert __version__ == version("auto-typing")

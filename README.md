@@ -17,6 +17,25 @@ Examples: `Chào bạn` → physical Telex `Chaof banj`; `as` → Unicode `as` (
 
 **Limitations:** The Hybrid planner chooses Telex for accented words it can convert and Unicode for plain ASCII/unsupported words. This is not language detection: some foreign words with overlapping accents (e.g. `café`) may be classified as Telex. Physical-only mode cannot inject emoji or arbitrary Unicode; Hybrid and Unicode Typing can attempt this with `KEYEVENTF_UNICODE`. Some target applications and IMEs handle `VK_PACKET`, composition boundaries or mixed keyboard/Unicode events differently, so **verify the output in Notepad with UniKey enabled before relying on mixed typing**. Character mapping depends on the Windows keyboard layout and application. Elevated applications can reject input injected from a normal-permission process. Windows is currently the only supported injection backend.
 
+## Download Windows v1.0.0
+
+Download **AutoTyping-v1.0.0-windows-x64.exe** from the [latest GitHub Release](https://github.com/truong51972/auto-typing/releases/latest), then launch it on Windows 10/11 (x64). This is a portable executable: **Python, uv and an installer are not required**.
+
+The release includes `SHA256SUMS.txt` for verifying the download. The binary is **not code-signed**, so SmartScreen may show a warning. Check its source and integrity before running it. Because automated smoke tests cannot validate real UniKey interactions, test the typing modes in Notepad before using the application elsewhere.
+
+### Building and publishing a new version
+
+Pull requests and pushes to `main` build a Windows executable using `windows-latest`, PyInstaller `--onefile --windowed`, and an offscreen GUI smoke test. Build artifacts are retained in GitHub Actions for 14 days.
+
+After merging a version bump into `main`, the workflow automatically publishes the corresponding `vX.Y.Z` GitHub Release (creating the matching tag if necessary) and attaches the EXE and its SHA-256 checksum. Existing releases are not overwritten. Alternatively, pushing a version-matched `vX.Y.Z` tag will build and publish that version.
+
+For local Windows packaging:
+
+```powershell
+uv sync --no-dev --group build
+uv run --no-dev --group build pyinstaller --noconfirm --clean --onefile --windowed --name AutoTyping --paths src scripts/auto_typing_entry.py
+```
+
 ## Run
 
 Requires Windows 10/11 and Python 3.11+.
